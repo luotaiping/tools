@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+
+<html>
+	<head>
+		<title>文件上传</title>
+	</head>
+	
+	<script src="uploadFile.js"></script>
+	<script>
+		function upload(event) {
+			console.log(uploadFile(event.target.files[0]));
+		}
+	
+		window.onload = function() {
+			document.getElementById('demo').addEventListener('change', upload);
+		}
+	</script>
+	
+	<body>
+	
+		<input id="demo" type="file" name="files" />
+		<div>请上传文件</div>
+	
+	</body>
+	
+</html>
