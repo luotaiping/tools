@@ -1,19 +1,20 @@
-var uploadFile = function(file, slice) {
+var uploadFile = function(file, slice, php) {
 	/* file表示一个文件指针	
 	** slice表示分片长度，默认1024*1024(1M)
+	** php表示后台处理文件，默认为uploadFile.php
 	*/
-	const sliceSize = 1024*1024;			// 默认分片长度为1MB
+	
 	//var md5 = hex_md5;					// 此处可以采用md5加密函数
 	
 	if (!(file instanceof File))
 		return '不是一个有效的文件指针';
 	
-	if (typeof(slice) === 'undefined')
-		slice = sliceSize;
+	slice = slice || 1024*1024;
+	php = php || "uploadFile.php";
 	
 	/* 初始化操作,阻塞模式 */
 	var xmlHttp = new XMLHttpRequest();
-	xmlHttp.open("GET", "uploadFile.php?filename=" + encodeURI(file.name) + "&slices=" + Math.ceil(file.size/slice), false);
+	xmlHttp.open("GET", php + "?filename=" + encodeURI(file.name) + "&slices=" + Math.ceil(file.size/slice), false);
 	xmlHttp.send();
 	
 	if (xmlHttp.responseText !== 'success')
@@ -28,7 +29,7 @@ var uploadFile = function(file, slice) {
 		reader.readAsBinaryString(blob);
 		
 		sendHttp.index = i;
-		sendHttp.open("post", "uploadFile.php");
+		sendHttp.open("post", php);
 		sendHttp.onreadystatechange = function() {
 			if (sendHttp.responseText === 'success' || sendHttp.responseText === "合并完成")
 				return '分片'+sendHttp.index+'上传成功';
