@@ -2,11 +2,13 @@
 ## 你可以简单的使用js中uploadFile来上传
 
 ----------
-js中uploadFile(file, slice)
+js中uploadFile(file, slice, php)
 
 file 表示一个文件指针
 
 slice 表示分片大小，默认为1M
+
+php 表示后台处理文件，默认为"uploadFile.php"
 
 ----------
 php中的uploadFile()
