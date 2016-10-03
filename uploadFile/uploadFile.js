@@ -30,10 +30,10 @@ var uploadFile = function(file, slice) {
 		sendHttp.index = i;
 		sendHttp.open("post", "uploadFile.php");
 		sendHttp.onreadystatechange = function() {
-			if (sendHttp.responseText !== 'success')
-				return '第'+sendHttp.index+'分片上传失败, 错误信息:'+sendHttp.responseText;
+			if (sendHttp.responseText === 'success' || sendHttp.responseText === "合并完成")
+				return '分片'+sendHttp.index+'上传成功';
 			
-			return sendHttp.responseText;
+			return '第'+sendHttp.index+'分片上传失败, 错误信息:'+sendHttp.responseText;
 		}
 		
 		/* 设置http头 */

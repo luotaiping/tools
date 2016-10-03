@@ -4,86 +4,90 @@ ini_set('session.save_path', '/tmp');
 
 session_start();
 
-/*	在nginx上需要手工写一个getallheaders()函数	*/
-$header = _my_get_all_headers();
-$config = get_json_array('config.json');
-
-define('PATH', $config['path']);
-
-set_time_limit($config['time_limit']);
-
-if (!file_exists(PATH))
-	mkdir(PATH);
-
-if (empty($_GET['filename']) || empty($_GET['slices']))
+function uploadFile() 
 {
-	if ($_SESSION['filename'] == urldecode($header['FILENAME']))
+	/*	在nginx上需要手工写一个getallheaders()函数	*/
+	$header = _my_get_all_headers();
+	$config = get_json_array('config.json');
+
+	define('PATH', $config['path']);
+
+	if (!file_exists(PATH))
+		mkdir(PATH);
+
+	if (empty($_GET['filename']) || empty($_GET['slices']))
 	{
-		/*	从post原始数据中读取信息	*/
-		$fp_input = fopen("php://input", 'rb');
-		$data = '';
-		$i = 0;
-		
-		if ($header['SLICESIZE'] < 8192)
-			$data = fread($fp_input, $header['SLICESIZE']);
-		else
+		if ($_SESSION['filename'] == urldecode($header['FILENAME']))
 		{
-			/*	对于网络流, fread每次最多读取8192	*/
-			for (; $i<$header['SLICESIZE']/8192; $i++)
+			/*	从post原始数据中读取信息	*/
+			$fp_input = fopen("php://input", 'rb');
+			$data = '';
+			$i = 0;
+			
+			if ($header['SLICESIZE'] < 8192)
+				$data = fread($fp_input, $header['SLICESIZE']);
+			else
 			{
-				$temp_data = fread($fp_input, 8192);
-				$data .= $temp_data;
+				/*	对于网络流, fread每次最多读取8192	*/
+				for (; $i<$header['SLICESIZE']/8192; $i++)
+				{
+					$temp_data = fread($fp_input, 8192);
+					$data .= $temp_data;
+				}
+			
+				/*	数据有多余的话再读取剩余不足8192的部分	*/
+				if ($header['SLICESIZE']%8192)
+				{
+					$temp_data = fread($fp_input, $header['SLICESIZE'] - $i*8192);
+					$data .= $temp_data;
+				}
 			}
-		
-			/*	数据有多余的话再读取剩余不足8192的部分	*/
-			if ($header['SLICESIZE']%8192)
+			
+			/*
+			此处可以采用md5算法验证数据准确性
+			if (md5($data) != $header['CHECKSUM'])
+				exit('数据校验失败');
+			*/
+			
+			if (file_exists(PATH.$header['FILENAME'].".".$header['SLICEINDEX']))
+				return "分片文件已存在";
+			
+			/*	临时文件的格式为 文件名.01、文件名.02 ...	*/
+			$fp_write = fopen(PATH.urldecode($header['FILENAME']).".".$header['SLICEINDEX'], "wb");
+			
+			if (!$fp_write)
+				return '打开写入文件失败';
+			
+			fwrite($fp_write, $data);
+			fflush($fp_write);
+			
+			$_SESSION['slice']++;
+			
+			/*	如果获取的数据已经达到足够，则进行合并	*/
+			if ($_SESSION['slice'] == $_SESSION['slices'])
 			{
-				$temp_data = fread($fp_input, $header['SLICESIZE'] - $i*8192);
-				$data .= $temp_data;
+				set_time_limit($config['time_limit']);
+				return merge_file($_SESSION['filename'], $_SESSION['slices']);
 			}
+			
+			return "success";
 		}
+		else
+			return "未初始化";
+	}
+	else if(!empty($_GET['filename']) && !empty($_GET['slices']))
+	{
+		/*	此处使用GET方法时进行初始化	*/
+		$_SESSION['filename'] = $_GET['filename'];
+		$_SESSION['slices'] = $_GET['slices'];
+		$_SESSION['slice'] = 0;
 		
-		/*
-		此处可以采用md5算法验证数据准确性
-		if (md5($data) != $header['CHECKSUM'])
-			exit('数据校验失败');
-		*/
-		
-		if (file_exists(PATH.$header['FILENAME'].".".$header['SLICEINDEX']))
-			exit("分片文件已存在");
-		
-		/*	临时文件的格式为 文件名.01、文件名.02 ...	*/
-		$fp_write = fopen(PATH.urldecode($header['FILENAME']).".".$header['SLICEINDEX'], "wb");
-		
-		if (!$fp_write)
-			exit('打开写入文件失败');
-		
-		fwrite($fp_write, $data);
-		fflush($fp_write);
-		
-		$_SESSION['slice']++;
-		
-		/*	如果获取的数据已经达到足够，则进行合并	*/
-		if ($_SESSION['slice'] == $_SESSION['slices'])
-			exit(merge_file($_SESSION['filename'], $_SESSION['slices']));
-		
-		echo "success";
+		return "success";
 	}
 	else
-		echo "未初始化";
-}
-else if(!empty($_GET['filename']) && !empty($_GET['slices']))
-{
-	/*	此处使用GET方法时进行初始化	*/
-	$_SESSION['filename'] = $_GET['filename'];
-	$_SESSION['slices'] = $_GET['slices'];
-	$_SESSION['slice'] = 0;
-	
-	echo "success";
-}
-else
-{
-	echo "参数错误！";
+	{
+		return "参数错误！";
+	}
 }
 
 function _my_get_all_headers()
@@ -105,7 +109,7 @@ function merge_file($filename, $num)
 	$fp_write = fopen(PATH.$filename, "ab+");
 	
 	if (!$fp_write)
-		exit('打开写入文件失败');
+		return '打开写入文件失败';
 	
 	for ($i=0; $i<$num; $i++)
 	{
@@ -115,7 +119,7 @@ function merge_file($filename, $num)
 			$fp_input = fopen(PATH.$filename.".".$i, "rb");
 			
 			if (!$fp_input)
-				exit("打开输入文件失败");
+				return "打开输入文件失败";
 			
 			fwrite($fp_write, fread($fp_input, get_file_size($fp_input)));
 			fflush($fp_write);
@@ -124,7 +128,7 @@ function merge_file($filename, $num)
 		}
 	}
 	
-	return "success";
+	return "合并完成";
 }
 
 function get_file_size($fp)
@@ -152,5 +156,7 @@ function get_json_array($filename)
 	
 	return json_decode($buffer, true);
 }
+
+echo uploadFile();
 
 ?>
